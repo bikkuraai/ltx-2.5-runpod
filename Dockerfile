@@ -1,22 +1,16 @@
 # RunPod公式のComfyUIイメージをベースにする
 FROM runpod/worker-comfyui:8.1.1
 
-# 作業場所の指定
-WORKDIR /workspace/ComfyUI/custom_nodes
+# root権限で安全にアップデートを実行する
+USER root
+WORKDIR /workspace/ComfyUI
 
-# 1. LTX-2.5専用のメインノード群
-RUN git clone https://github.com/kijai/ComfyUI-LTXVideo.git && \
-    pip install --no-cache-dir -r ComfyUI-LTXVideo/requirements.txt
+# gitの安全ディレクトリ設定を追加し、競合を避けて最新版にアップデート
+RUN git config --global --add safe.directory /workspace/ComfyUI && \
+    git fetch origin master && \
+    git reset --hard origin/master && \
+    pip install --no-cache-dir -r requirements.txt
 
-# 2. 数式やスイッチなどの便利ノード群
-RUN git clone https://github.com/rgthree/rgthree-comfy.git && \
-    git clone https://github.com/evansd/ComfyMath.git
-
-# 3. 画像リサイズや解像度関連のノード群
-RUN git clone https://github.com/cubiq/ComfyUI_essentials.git && \
-    pip install --no-cache-dir -r ComfyUI_essentials/requirements.txt && \
-    git clone https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git --recursive
-
-# 作業場所をルートに戻して、ワーカー起動用コマンドを設定
+# サーバーレス起動用コマンド
 WORKDIR /
 CMD ["python", "-u", "/handler.py"]
