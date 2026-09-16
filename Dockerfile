@@ -1,5 +1,5 @@
 # RunPod公式のComfyUIイメージをベースにする
-FROM runpod/worker-comfyui:8.1.1
+FROM runpod/worker-comfyui:latest
 
 # root権限で安全にアップデートを実行する
 USER root
