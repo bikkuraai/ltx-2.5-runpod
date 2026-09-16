@@ -1,5 +1,5 @@
 # RunPod公式のComfyUIイメージをベースにする
-FROM runpod/worker-comfyui:latest
+FROM runpod/worker-comfyui:5.10.0-base-cuda12.8.1
 
 # root権限で安全にアップデートを実行する
 USER root
