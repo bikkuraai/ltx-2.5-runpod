@@ -1,19 +1,39 @@
-FROM runpod/worker-comfyui:5.10.0-base-cuda12.8.1
+# ベースイメージ
+FROM runpod/worker-comfyui:latest
 
-# 1. ComfyUIが期待するモデルフォルダを事前に作成
-RUN mkdir -p /comfyui/models/unet && \
-    mkdir -p /comfyui/models/clip && \
-    mkdir -p /comfyui/models/vae && \
-    mkdir -p /comfyui/models/upscale_models
+USER root
+# 必須パッケージとFFmpegの導入
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    ffmpeg \
+    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
 
-# 2. RunPodキャッシュの固定パス（過去のログから取得した正確なハッシュ値）
-ENV LTX_CACHE="/runpod-volume/huggingface-cache/hub/models--lightricks--ltx-2.5/snapshots/62a8fc22e70a66d03f0b2f5d76d4ebc5ba213458"
+WORKDIR /comfyui/custom_nodes
+# LTX-2.5生成用および動画結合用のノード導入
+RUN git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git && \
+    cd ComfyUI-LTXVideo && \
+    pip install --no-cache-dir -r requirements.txt
+RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
+    cd ComfyUI-VideoHelperSuite && \
+    pip install --no-cache-dir -r requirements.txt
 
-# 3. 起動を邪魔しないよう、ビルド時にショートカットだけを作成（リンク先が無くてもOK）
-RUN ln -sf ${LTX_CACHE}/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors /comfyui/models/unet/ && \
-    ln -sf ${LTX_CACHE}/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors /comfyui/models/clip/ && \
-    ln -sf ${LTX_CACHE}/vae/ltx-2.5-video-vae-bf16.safetensors /comfyui/models/vae/ && \
-    ln -sf ${LTX_CACHE}/vae/ltx-2.5-audio-vae-bf16.safetensors /comfyui/models/vae/ && \
-    ln -sf ${LTX_CACHE}/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors /comfyui/models/upscale_models/
+WORKDIR /
+# 動的シンボリックリンクを生成し、正規の起動プロセスへ引き継ぐラッパースクリプト
+RUN echo '#!/bin/bash\n\
+CACHE_DIR="/runpod-volume/huggingface-cache/hub"\n\
+TARGET_DIRS=("/comfyui/models/checkpoints" "/comfyui/models/unet" "/comfyui/models/diffusion_models" "/comfyui/models/clip" "/comfyui/models/text_encoders" "/comfyui/models/vae")\n\
+for dir in "${TARGET_DIRS[@]}"; do mkdir -p "$dir"; done\n\
+if [ -d "$CACHE_DIR" ]; then\n\
+    find "$CACHE_DIR" -type f -name "*.safetensors" | while read -r filepath; do\n\
+        filename=$(basename "$filepath")\n\
+        for dir in "${TARGET_DIRS[@]}"; do ln -sf "$filepath" "$dir/$filename"; done\n\
+    done\n\
+fi\n\
+exec /start.sh' > /start_wrapper.sh && chmod +x /start_wrapper.sh
 
-# ※ ENTRYPOINT や CMD は絶対に記述しない（RunPod公式の安全な起動プロセスを維持するため）
+# エントリーポイントの書き換え
+CMD ["/start_wrapper.sh"]
