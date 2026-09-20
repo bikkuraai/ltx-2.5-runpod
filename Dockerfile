@@ -25,7 +25,7 @@ WORKDIR /
 # 動的シンボリックリンクを生成し、正規の起動プロセスへ引き継ぐラッパースクリプト
 RUN echo '#!/bin/bash\n\
 CACHE_DIR="/runpod-volume/huggingface-cache/hub"\n\
-TARGET_DIRS=("/comfyui/models/checkpoints" "/comfyui/models/unet" "/comfyui/models/diffusion_models" "/comfyui/models/clip" "/comfyui/models/text_encoders" "/comfyui/models/vae")\n\
+TARGET_DIRS=("/comfyui/models/checkpoints" "/comfyui/models/unet" "/comfyui/models/diffusion_models" "/comfyui/models/clip" "/comfyui/models/text_encoders" "/comfyui/models/vae" "/comfyui/models/upscale_models")\n\
 for dir in "${TARGET_DIRS[@]}"; do mkdir -p "$dir"; done\n\
 if [ -d "$CACHE_DIR" ]; then\n\
     find "$CACHE_DIR" -type f -name "*.safetensors" | while read -r filepath; do\n\
