@@ -1,5 +1,5 @@
-# ベースイメージ
-FROM runpod/worker-comfyui:latest
+# ベースイメージ (latestではなく、成功実績のあるバージョンを直接指定)
+FROM runpod/worker-comfyui:5.10.0-base-cuda12.8.1
 
 USER root
 
