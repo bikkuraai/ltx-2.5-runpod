@@ -85,10 +85,14 @@ if [ -d "${SNAPSHOT_DIR}/vae" ]; then
     ln -sf ${SNAPSHOT_DIR}/vae/*.safetensors ${COMFY_MODEL_DIR}/vae/
 fi
 
-# Latent Upscaler (ComfyUIの認識漏れを防ぐため両フォルダへリンク)
+# Latent Upscaler (フォルダ内・直下の両方を網羅)
 if [ -d "${SNAPSHOT_DIR}/latent_upscale_models" ]; then
     ln -sf ${SNAPSHOT_DIR}/latent_upscale_models/*.safetensors ${COMFY_MODEL_DIR}/latent_upscale_models/
     ln -sf ${SNAPSHOT_DIR}/latent_upscale_models/*.safetensors ${COMFY_MODEL_DIR}/upscale_models/
+fi
+if ls ${SNAPSHOT_DIR}/*upscaler*.safetensors 1> /dev/null 2>&1; then
+    ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/latent_upscale_models/
+    ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/upscale_models/
 fi
 
 echo "[Wrapper] Initialization complete. Starting ComfyUI..."
