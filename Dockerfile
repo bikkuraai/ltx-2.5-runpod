@@ -1,4 +1,4 @@
-# ベースイメージ (latestではなく、成功実績のあるバージョンを直接指定)
+# ベースイメージ
 FROM runpod/worker-comfyui:5.10.0-base-cuda12.8.1
 
 USER root
@@ -9,14 +9,15 @@ ENV HF_HUB_OFFLINE=1
 ENV TRANSFORMERS_OFFLINE=1
 ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# 必須パッケージとツールの導入
+# 必須パッケージとツールの導入 (libgl1-mesa-glx を libgl1 と libglib2.0-0 に修正)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
     wget \
     ffmpeg \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # LTX-2.5用ノードの導入
