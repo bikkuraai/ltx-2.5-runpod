@@ -32,7 +32,7 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 
 WORKDIR /
 
-# 起動ラッパースクリプトの生成 (clip, unet ディレクトリへのリンクを追加)
+# 起動ラッパースクリプトの生成 (ファイル一覧出力コマンドを追加)
 RUN printf '#!/bin/bash\n\
 set -e\n\
 echo "[Wrapper] Starting ComfyUI initialization sequence..."\n\
@@ -58,6 +58,10 @@ if [ ! -d "${SNAPSHOT_DIR}" ]; then\n\
     echo "[Error] Snapshot directory does not exist: ${SNAPSHOT_DIR}"\n\
     exit 1\n\
 fi\n\
+\n\
+echo "========== [DEBUG] SNAPSHOT_DIR CONTENTS =========="\n\
+ls -laR "${SNAPSHOT_DIR}"\n\
+echo "==================================================="\n\
 \n\
 COMFY_MODEL_DIR="/comfyui/models"\n\
 mkdir -p ${COMFY_MODEL_DIR}/diffusion_models ${COMFY_MODEL_DIR}/text_encoders ${COMFY_MODEL_DIR}/unet ${COMFY_MODEL_DIR}/clip ${COMFY_MODEL_DIR}/vae ${COMFY_MODEL_DIR}/latent_upscale_models ${COMFY_MODEL_DIR}/upscale_models\n\
