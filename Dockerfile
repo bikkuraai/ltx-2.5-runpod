@@ -9,7 +9,7 @@ ENV HF_HUB_OFFLINE=1
 ENV TRANSFORMERS_OFFLINE=1
 ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# 必須パッケージとツールの導入 (libgl1-mesa-glx を libgl1 と libglib2.0-0 に修正)
+# 必須パッケージとツールの導入
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -20,23 +20,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# LTX-2.5用ノードの導入
+# LTX-2.5用ノードの導入とkorniaの互換バージョン固定
 WORKDIR /comfyui/custom_nodes
 RUN git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git && \
     cd ComfyUI-LTXVideo && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir kornia==0.7.3
 RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     cd ComfyUI-VideoHelperSuite && \
     pip install --no-cache-dir -r requirements.txt
 
 WORKDIR /
 
-# 起動ラッパースクリプトの生成 (大文字・小文字両対応版)
+# 起動ラッパースクリプトの生成 (clip, unet ディレクトリへのリンクを追加)
 RUN printf '#!/bin/bash\n\
 set -e\n\
 echo "[Wrapper] Starting ComfyUI initialization sequence..."\n\
 \n\
-# 大文字・小文字のどちらでマウントされても自動検知する\n\
 if [ -d "/runpod-volume/huggingface-cache/hub/models--Lightricks--LTX-2.5" ]; then\n\
     CACHE_ROOT="/runpod-volume/huggingface-cache/hub/models--Lightricks--LTX-2.5"\n\
 elif [ -d "/runpod-volume/huggingface-cache/hub/models--lightricks--ltx-2.5" ]; then\n\
@@ -60,14 +60,16 @@ if [ ! -d "${SNAPSHOT_DIR}" ]; then\n\
 fi\n\
 \n\
 COMFY_MODEL_DIR="/comfyui/models"\n\
-mkdir -p ${COMFY_MODEL_DIR}/diffusion_models ${COMFY_MODEL_DIR}/text_encoders ${COMFY_MODEL_DIR}/vae ${COMFY_MODEL_DIR}/latent_upscale_models ${COMFY_MODEL_DIR}/upscale_models\n\
+mkdir -p ${COMFY_MODEL_DIR}/diffusion_models ${COMFY_MODEL_DIR}/text_encoders ${COMFY_MODEL_DIR}/unet ${COMFY_MODEL_DIR}/clip ${COMFY_MODEL_DIR}/vae ${COMFY_MODEL_DIR}/latent_upscale_models ${COMFY_MODEL_DIR}/upscale_models\n\
 \n\
 echo "[Wrapper] Creating symlinks for specific LTX-2.5 components..."\n\
 if ls ${SNAPSHOT_DIR}/*transformer*.safetensors 1> /dev/null 2>&1; then\n\
     ln -sf ${SNAPSHOT_DIR}/*transformer*.safetensors ${COMFY_MODEL_DIR}/diffusion_models/\n\
+    ln -sf ${SNAPSHOT_DIR}/*transformer*.safetensors ${COMFY_MODEL_DIR}/unet/\n\
 fi\n\
 if ls ${SNAPSHOT_DIR}/gemma4*.safetensors 1> /dev/null 2>&1; then\n\
     ln -sf ${SNAPSHOT_DIR}/gemma4*.safetensors ${COMFY_MODEL_DIR}/text_encoders/\n\
+    ln -sf ${SNAPSHOT_DIR}/gemma4*.safetensors ${COMFY_MODEL_DIR}/clip/\n\
 fi\n\
 if [ -d "${SNAPSHOT_DIR}/vae" ]; then\n\
     ln -sf ${SNAPSHOT_DIR}/vae/*.safetensors ${COMFY_MODEL_DIR}/vae/\n\
