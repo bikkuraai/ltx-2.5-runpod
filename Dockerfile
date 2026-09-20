@@ -30,8 +30,8 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 
 WORKDIR /
 
-# 起動ラッパースクリプトの生成 (RunPodビルダーで確実に通るecho構文)
-RUN echo '#!/bin/bash\n\
+# 起動ラッパースクリプトの生成 (RunPodビルダーで確実に通るprintf構文)
+RUN printf '#!/bin/bash\n\
 set -e\n\
 echo "[Wrapper] Starting ComfyUI initialization sequence..."\n\
 MODEL_ORG="Lightricks"\n\
@@ -73,6 +73,6 @@ if ls ${SNAPSHOT_DIR}/*upscaler*.safetensors 1> /dev/null 2>&1; then\n\
     ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/upscale_models/\n\
 fi\n\
 echo "[Wrapper] Initialization complete. Starting ComfyUI..."\n\
-exec /start.sh' > /start_wrapper.sh && chmod +x /start_wrapper.sh
+exec /start.sh\n' > /start_wrapper.sh && chmod +x /start_wrapper.sh
 
 CMD ["/start_wrapper.sh"]
