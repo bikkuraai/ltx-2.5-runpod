@@ -2,7 +2,14 @@
 FROM runpod/worker-comfyui:latest
 
 USER root
-# 必須パッケージとFFmpegの導入
+
+# 環境変数の設定 (Model Cacheおよびメモリ管理の最適化)
+ENV HF_HOME=/runpod-volume/huggingface-cache
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
+ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+
+# 必須パッケージとツールの導入
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -12,8 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
+# LTX-2.5用ノードの導入
 WORKDIR /comfyui/custom_nodes
-# LTX-2.5生成用および動画結合用のノード導入
 RUN git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git && \
     cd ComfyUI-LTXVideo && \
     pip install --no-cache-dir -r requirements.txt
@@ -22,29 +29,72 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     pip install --no-cache-dir -r requirements.txt
 
 WORKDIR /
-# 動的シンボリックリンクを生成し、正規の起動プロセスへ引き継ぐラッパースクリプト
-RUN echo '#!/bin/bash\n\
-CACHE_DIR="/runpod-volume/huggingface-cache/hub/models--lightricks--ltx-2.5/snapshots"\n\
-TARGET_DIRS=("/comfyui/models/checkpoints" "/comfyui/models/unet" "/comfyui/models/diffusion_models" "/comfyui/models/clip" "/comfyui/models/text_encoders" "/comfyui/models/vae" "/comfyui/models/upscale_models")\n\
-for dir in "${TARGET_DIRS[@]}"; do mkdir -p "$dir"; done\n\
-if [ -d "$CACHE_DIR" ]; then\n\
-    LATEST_SNAPSHOT=$(ls -dt "$CACHE_DIR"/* | head -n 1)\n\
-    if [ -n "$LATEST_SNAPSHOT" ]; then\n\
-        echo "Linking models from $LATEST_SNAPSHOT..."\n\
-        find "$LATEST_SNAPSHOT" -maxdepth 3 -name "*.safetensors" | while read -r filepath; do\n\
-            filename=$(basename "$filepath")\n\
-            for dir in "${TARGET_DIRS[@]}"; do ln -sf "$filepath" "$dir/$filename"; done\n\
-        done\n\
-    fi\n\
-else\n\
-    echo "Cache directory not found."\n\
-fi\n\
-exec /start.sh' > /start_wrapper.sh && chmod +x /start_wrapper.sh
 
-# LTX-2.5用のアップスケーラーモデルを直接ダウンロードして配置
-RUN mkdir -p /comfyui/models/upscale_models && \
-    wget -qO /comfyui/models/upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors \
-    https://huggingface.co/ibyteohdear/Lightricks-LTX-2/resolve/main/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors
+# 起動ラッパースクリプトの生成
+RUN cat << 'EOF' > /start_wrapper.sh
+#!/bin/bash
+set -e
+echo "[Wrapper] Starting ComfyUI initialization sequence..."
 
-# エントリーポイントの書き換え
+# 1. 大文字小文字を厳密に合わせたキャッシュルート定義
+MODEL_ORG="Lightricks"
+MODEL_REPO="LTX-2.5"
+CACHE_ROOT="/runpod-volume/huggingface-cache/hub/models--${MODEL_ORG}--${MODEL_REPO}"
+
+if [ ! -d "${CACHE_ROOT}" ]; then
+    echo "[Error] Model cache directory not found: ${CACHE_ROOT}"
+    exit 1
+fi
+
+# 2. 最新スナップショットの動的解決
+REF_FILE="${CACHE_ROOT}/refs/main"
+if [ ! -f "${REF_FILE}" ]; then
+    echo "[Error] refs/main not found."
+    exit 1
+fi
+
+SNAPSHOT_HASH=$(cat "${REF_FILE}")
+SNAPSHOT_DIR="${CACHE_ROOT}/snapshots/${SNAPSHOT_HASH}"
+
+if [ ! -d "${SNAPSHOT_DIR}" ]; then
+    echo "[Error] Snapshot directory does not exist: ${SNAPSHOT_DIR}"
+    exit 1
+fi
+
+COMFY_MODEL_DIR="/comfyui/models"
+mkdir -p ${COMFY_MODEL_DIR}/diffusion_models \
+         ${COMFY_MODEL_DIR}/text_encoders \
+         ${COMFY_MODEL_DIR}/vae \
+         ${COMFY_MODEL_DIR}/latent_upscale_models \
+         ${COMFY_MODEL_DIR}/upscale_models
+
+echo "[Wrapper] Creating symlinks for specific LTX-2.5 components..."
+
+# Diffusion Model
+if ls ${SNAPSHOT_DIR}/*transformer*.safetensors 1> /dev/null 2>&1; then
+    ln -sf ${SNAPSHOT_DIR}/*transformer*.safetensors ${COMFY_MODEL_DIR}/diffusion_models/
+fi
+
+# Text Encoder
+if ls ${SNAPSHOT_DIR}/gemma4*.safetensors 1> /dev/null 2>&1; then
+    ln -sf ${SNAPSHOT_DIR}/gemma4*.safetensors ${COMFY_MODEL_DIR}/text_encoders/
+fi
+
+# VAE
+if [ -d "${SNAPSHOT_DIR}/vae" ]; then
+    ln -sf ${SNAPSHOT_DIR}/vae/*.safetensors ${COMFY_MODEL_DIR}/vae/
+fi
+
+# Latent Upscaler (ComfyUIの認識漏れを防ぐため両フォルダへリンク)
+if [ -d "${SNAPSHOT_DIR}/latent_upscale_models" ]; then
+    ln -sf ${SNAPSHOT_DIR}/latent_upscale_models/*.safetensors ${COMFY_MODEL_DIR}/latent_upscale_models/
+    ln -sf ${SNAPSHOT_DIR}/latent_upscale_models/*.safetensors ${COMFY_MODEL_DIR}/upscale_models/
+fi
+
+echo "[Wrapper] Initialization complete. Starting ComfyUI..."
+exec /start.sh
+EOF
+
+RUN chmod +x /start_wrapper.sh
+
 CMD ["/start_wrapper.sh"]
