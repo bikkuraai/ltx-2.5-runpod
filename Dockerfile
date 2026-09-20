@@ -30,17 +30,22 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 
 WORKDIR /
 
-# 起動ラッパースクリプトの生成 (RunPodビルダーで確実に通るprintf構文)
+# 起動ラッパースクリプトの生成 (大文字・小文字両対応版)
 RUN printf '#!/bin/bash\n\
 set -e\n\
 echo "[Wrapper] Starting ComfyUI initialization sequence..."\n\
-MODEL_ORG="Lightricks"\n\
-MODEL_REPO="LTX-2.5"\n\
-CACHE_ROOT="/runpod-volume/huggingface-cache/hub/models--${MODEL_ORG}--${MODEL_REPO}"\n\
-if [ ! -d "${CACHE_ROOT}" ]; then\n\
-    echo "[Error] Model cache directory not found: ${CACHE_ROOT}"\n\
+\n\
+# 大文字・小文字のどちらでマウントされても自動検知する\n\
+if [ -d "/runpod-volume/huggingface-cache/hub/models--Lightricks--LTX-2.5" ]; then\n\
+    CACHE_ROOT="/runpod-volume/huggingface-cache/hub/models--Lightricks--LTX-2.5"\n\
+elif [ -d "/runpod-volume/huggingface-cache/hub/models--lightricks--ltx-2.5" ]; then\n\
+    CACHE_ROOT="/runpod-volume/huggingface-cache/hub/models--lightricks--ltx-2.5"\n\
+else\n\
+    echo "[Error] Model cache directory not found in either case-style."\n\
     exit 1\n\
 fi\n\
+echo "[Wrapper] Using cache directory: ${CACHE_ROOT}"\n\
+\n\
 REF_FILE="${CACHE_ROOT}/refs/main"\n\
 if [ ! -f "${REF_FILE}" ]; then\n\
     echo "[Error] refs/main not found."\n\
@@ -52,8 +57,10 @@ if [ ! -d "${SNAPSHOT_DIR}" ]; then\n\
     echo "[Error] Snapshot directory does not exist: ${SNAPSHOT_DIR}"\n\
     exit 1\n\
 fi\n\
+\n\
 COMFY_MODEL_DIR="/comfyui/models"\n\
 mkdir -p ${COMFY_MODEL_DIR}/diffusion_models ${COMFY_MODEL_DIR}/text_encoders ${COMFY_MODEL_DIR}/vae ${COMFY_MODEL_DIR}/latent_upscale_models ${COMFY_MODEL_DIR}/upscale_models\n\
+\n\
 echo "[Wrapper] Creating symlinks for specific LTX-2.5 components..."\n\
 if ls ${SNAPSHOT_DIR}/*transformer*.safetensors 1> /dev/null 2>&1; then\n\
     ln -sf ${SNAPSHOT_DIR}/*transformer*.safetensors ${COMFY_MODEL_DIR}/diffusion_models/\n\
@@ -72,6 +79,7 @@ if ls ${SNAPSHOT_DIR}/*upscaler*.safetensors 1> /dev/null 2>&1; then\n\
     ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/latent_upscale_models/\n\
     ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/upscale_models/\n\
 fi\n\
+\n\
 echo "[Wrapper] Initialization complete. Starting ComfyUI..."\n\
 exec /start.sh\n' > /start_wrapper.sh && chmod +x /start_wrapper.sh
 
