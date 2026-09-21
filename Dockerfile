@@ -32,7 +32,7 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 
 WORKDIR /
 
-# 起動ラッパースクリプトの生成 (findコマンドによる再帰的検索へ修正)
+# 起動ラッパースクリプトの生成 (ファイル一覧出力コマンドを追加)
 RUN printf '#!/bin/bash\n\
 set -e\n\
 echo "[Wrapper] Starting ComfyUI initialization sequence..."\n\
@@ -54,6 +54,10 @@ if [ ! -f "${REF_FILE}" ]; then\n\
 fi\n\
 SNAPSHOT_HASH=$(cat "${REF_FILE}")\n\
 SNAPSHOT_DIR="${CACHE_ROOT}/snapshots/${SNAPSHOT_HASH}"\n\
+if [ ! -d "${SNAPSHOT_DIR}" ]; then\n\
+    echo "[Error] Snapshot directory does not exist: ${SNAPSHOT_DIR}"\n\
+    exit 1\n\
+fi\n\
 \n\
 echo "========== [DEBUG] SNAPSHOT_DIR CONTENTS =========="\n\
 ls -laR "${SNAPSHOT_DIR}"\n\
@@ -62,22 +66,26 @@ echo "==================================================="\n\
 COMFY_MODEL_DIR="/comfyui/models"\n\
 mkdir -p ${COMFY_MODEL_DIR}/diffusion_models ${COMFY_MODEL_DIR}/text_encoders ${COMFY_MODEL_DIR}/unet ${COMFY_MODEL_DIR}/clip ${COMFY_MODEL_DIR}/vae ${COMFY_MODEL_DIR}/latent_upscale_models ${COMFY_MODEL_DIR}/upscale_models\n\
 \n\
-echo "[Wrapper] Creating symlinks for specific LTX-2.5 components via find command..."\n\
-\n\
-# UNET / Diffusion Models の再帰的リンク生成\n\
-find "${SNAPSHOT_DIR}" -type f -name "*transformer*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/diffusion_models/ \\;\n\
-find "${SNAPSHOT_DIR}" -type f -name "*transformer*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/unet/ \\;\n\
-\n\
-# Text Encoders / CLIP の再帰的リンク生成\n\
-find "${SNAPSHOT_DIR}" -type f -name "gemma4*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/text_encoders/ \\;\n\
-find "${SNAPSHOT_DIR}" -type f -name "gemma4*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/clip/ \\;\n\
-\n\
-# VAE の再帰的リンク生成\n\
-find "${SNAPSHOT_DIR}" -type f -name "*vae*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/vae/ \\;\n\
-\n\
-# Upscaler の再帰的リンク生成\n\
-find "${SNAPSHOT_DIR}" -type f -name "*upscaler*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/latent_upscale_models/ \\;\n\
-find "${SNAPSHOT_DIR}" -type f -name "*upscaler*.safetensors" -exec ln -sf {} ${COMFY_MODEL_DIR}/upscale_models/ \\;\n\
+echo "[Wrapper] Creating symlinks for specific LTX-2.5 components..."\n\
+if ls ${SNAPSHOT_DIR}/*transformer*.safetensors 1> /dev/null 2>&1; then\n\
+    ln -sf ${SNAPSHOT_DIR}/*transformer*.safetensors ${COMFY_MODEL_DIR}/diffusion_models/\n\
+    ln -sf ${SNAPSHOT_DIR}/*transformer*.safetensors ${COMFY_MODEL_DIR}/unet/\n\
+fi\n\
+if ls ${SNAPSHOT_DIR}/gemma4*.safetensors 1> /dev/null 2>&1; then\n\
+    ln -sf ${SNAPSHOT_DIR}/gemma4*.safetensors ${COMFY_MODEL_DIR}/text_encoders/\n\
+    ln -sf ${SNAPSHOT_DIR}/gemma4*.safetensors ${COMFY_MODEL_DIR}/clip/\n\
+fi\n\
+if [ -d "${SNAPSHOT_DIR}/vae" ]; then\n\
+    ln -sf ${SNAPSHOT_DIR}/vae/*.safetensors ${COMFY_MODEL_DIR}/vae/\n\
+fi\n\
+if [ -d "${SNAPSHOT_DIR}/latent_upscale_models" ]; then\n\
+    ln -sf ${SNAPSHOT_DIR}/latent_upscale_models/*.safetensors ${COMFY_MODEL_DIR}/latent_upscale_models/\n\
+    ln -sf ${SNAPSHOT_DIR}/latent_upscale_models/*.safetensors ${COMFY_MODEL_DIR}/upscale_models/\n\
+fi\n\
+if ls ${SNAPSHOT_DIR}/*upscaler*.safetensors 1> /dev/null 2>&1; then\n\
+    ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/latent_upscale_models/\n\
+    ln -sf ${SNAPSHOT_DIR}/*upscaler*.safetensors ${COMFY_MODEL_DIR}/upscale_models/\n\
+fi\n\
 \n\
 echo "[Wrapper] Initialization complete. Starting ComfyUI..."\n\
 exec /start.sh\n' > /start_wrapper.sh && chmod +x /start_wrapper.sh
